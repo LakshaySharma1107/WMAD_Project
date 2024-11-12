@@ -18,14 +18,14 @@ CORS(app)  # Allow cross-origin requests for React Native
 model = load_model('My_Best_Model.h5')
 model.compile(optimizer=Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
 
-model_2 = load_model('fast_text_model.h5')
-model_2.compile(optimizer=Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
+# # model_2 = load_model('fast_text_model.h5')
+# # model_2.compile(optimizer=Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
 
-# Load the tokenizers and model (assuming they're saved as shown earlier)
-with open('ft_word_tokenizer.pkl', 'rb') as handle:
-    tokenizer = pickle.load(handle)
-with open('ft_char_tokenizer.pkl', 'rb') as handle:
-    char_tokenizer = pickle.load(handle)
+# # Load the tokenizers and model (assuming they're saved as shown earlier)
+# # with open('ft_word_tokenizer.pkl', 'rb') as handle:
+# #     tokenizer = pickle.load(handle)
+# # with open('ft_char_tokenizer.pkl', 'rb') as handle:
+# #     char_tokenizer = pickle.load(handle)
 
 # Define the segment duration (500 milliseconds)
 segment_duration = 500
@@ -96,169 +96,138 @@ def process_audio(audio):
         print(f"Error processing audio file: {e}")
         return None
 
-#------------------------------------------Text------------------------------------------
-def preprocess_sentence(sentence):
-    char_max_length = 15
-    max_length = 475
-    word_sequence = tokenizer.texts_to_sequences([sentence])
-    padded_word_sequence = pad_sequences(word_sequence, maxlen=max_length, padding='post', truncating='post')
-    char_sequence = [[char_tokenizer.word_index.get(char, 0) for char in word] for word in sentence.split()]
-    char_sequence = pad_sequences(char_sequence, maxlen=char_max_length, padding="post")
-    padded_char_sequence = pad_sequences([char_sequence], maxlen=max_length, padding='post', dtype='int32')
-    return padded_word_sequence, padded_char_sequence
+# #------------------------------------------Text------------------------------------------
+# # def preprocess_sentence(sentence):
+# #     char_max_length = 15
+# #     max_length = 475
+# #     word_sequence = tokenizer.texts_to_sequences([sentence])
+# #     padded_word_sequence = pad_sequences(word_sequence, maxlen=max_length, padding='post', truncating='post')
+# #     char_sequence = [[char_tokenizer.word_index.get(char, 0) for char in word] for word in sentence.split()]
+# #     char_sequence = pad_sequences(char_sequence, maxlen=char_max_length, padding="post")
+# #     padded_char_sequence = pad_sequences([char_sequence], maxlen=max_length, padding='post', dtype='int32')
+# #     return padded_word_sequence, padded_char_sequence
 
-def predict_bad_words(sentence):
-    max_length = 475
-    padded_word_sequence, padded_char_sequence = preprocess_sentence(sentence)
-    predictions = model_2.predict([padded_word_sequence, padded_char_sequence])  # Feed both sequences
-    threshold = 0.5
-    predicted_labels = (predictions > threshold).astype(int)[0]
-    words = sentence.split()
-    bad_words = [word for i, word in enumerate(words[:max_length]) if predicted_labels[i] == 1]
-    return bad_words
+# # def predict_bad_words(sentence):
+# #     max_length = 475
+# #     padded_word_sequence, padded_char_sequence = preprocess_sentence(sentence)
+# #     predictions = model_2.predict([padded_word_sequence, padded_char_sequence])  # Feed both sequences
+# #     threshold = 0.5
+# #     predicted_labels = (predictions > threshold).astype(int)[0]
+# #     words = sentence.split()
+# #     bad_words = [word for i, word in enumerate(words[:max_length]) if predicted_labels[i] == 1]
+# #     return bad_words
 
-def convert_mp3_to_wav(mp3_file, wav_file):
-    try:
-        subprocess.run(['ffmpeg', '-i', mp3_file, '-ac', '1', '-ar', '16000', wav_file], check=True)
-    except subprocess.CalledProcessError as e:
-        print("Error during MP3 to WAV conversion:", e)
+# # def convert_mp3_to_wav(mp3_file, wav_file):
+# #     try:
+# #         subprocess.run(['ffmpeg', '-i', mp3_file, '-ac', '1', '-ar', '16000', wav_file], check=True)
+# #     except subprocess.CalledProcessError as e:
+# #         print("Error during MP3 to WAV conversion:", e)
 
-def transcribe_audio_with_timestamps(audio_file, model_path):
-    if not os.path.exists(model_path):
-        print(f"Model not found at {model_path}")
-        return []
+# # def transcribe_audio_with_timestamps(audio_file, model_path):
+# #     if not os.path.exists(model_path):
+# #         print(f"Model not found at {model_path}")
+# #         return []
     
-    model = Model(model_path)
-    if not audio_file.lower().endswith('.wav'):
-        wav_file = audio_file.rsplit('.', 1)[0] + '.wav'
-        if audio_file.lower().endswith('.mp3'):
-            convert_mp3_to_wav(audio_file, wav_file)
-            audio_file = wav_file
-        else:
-            print("Audio file must be in WAV format or MP3 format.")
-            return []
+# #     model = Model(model_path)
+# #     if not audio_file.lower().endswith('.wav'):
+# #         wav_file = audio_file.rsplit('.', 1)[0] + '.wav'
+# #         if audio_file.lower().endswith('.mp3'):
+# #             convert_mp3_to_wav(audio_file, wav_file)
+# #             audio_file = wav_file
+# #         else:
+# #             print("Audio file must be in WAV format or MP3 format.")
+# #             return []
     
-    try:
-        wf = wave.open(audio_file, "rb")
-        if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getcomptype() != "NONE":
-            print("Audio file must be WAV format mono PCM.")
-            return []
-    except Exception as e:
-        print(f"Error opening audio file: {e}")
-        return []
+# #     try:
+# #         wf = wave.open(audio_file, "rb")
+# #         if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getcomptype() != "NONE":
+# #             print("Audio file must be WAV format mono PCM.")
+# #             return []
+# #     except Exception as e:
+# #         print(f"Error opening audio file: {e}")
+# #         return []
     
-    rec = KaldiRecognizer(model, wf.getframerate())
-    rec.SetWords(True)
-    results = []
-    while True:
-        data = wf.readframes(4000)
-        if len(data) == 0:
-            break
-        if rec.AcceptWaveform(data):
-            result = json.loads(rec.Result())
-            results.append(result)
-        else:
-            rec.PartialResult()
-    final_result = json.loads(rec.FinalResult())
-    results.append(final_result)
+# #     rec = KaldiRecognizer(model, wf.getframerate())
+# #     rec.SetWords(True)
+# #     results = []
+# #     while True:
+# #         data = wf.readframes(4000)
+# #         if len(data) == 0:
+# #             break
+# #         if rec.AcceptWaveform(data):
+# #             result = json.loads(rec.Result())
+# #             results.append(result)
+# #         else:
+# #             rec.PartialResult()
+# #     final_result = json.loads(rec.FinalResult())
+# #     results.append(final_result)
     
-    word_timestamps = []
-    for result in results:
-        if 'result' in result:
-            for word_info in result['result']:
-                word_timestamps.append({
-                    'word': word_info.get('word', ''),
-                    'start': word_info.get('start', 0),
-                    'end': word_info.get('end', 0)
-                })
-    return word_timestamps
+# #     word_timestamps = []
+# #     for result in results:
+# #         if 'result' in result:
+# #             for word_info in result['result']:
+# #                 word_timestamps.append({
+# #                     'word': word_info.get('word', ''),
+# #                     'start': word_info.get('start', 0),
+# #                     'end': word_info.get('end', 0)
+# #                 })
+# #     return word_timestamps
 
-def mute_bad_words_in_audio(audio_file, bad_words, word_timestamps):
-    if not os.path.exists(audio_file):
-        print(f"Audio file {audio_file} not found.")
-        return None
+# # def mute_bad_words_in_audio(audio_file, bad_words, word_timestamps):
+# #     if not os.path.exists(audio_file):
+# #         print(f"Audio file {audio_file} not found.")
+# #         return None
     
-    audio = AudioSegment.from_wav(audio_file)
-    for item in word_timestamps:
-        if item['word'] in bad_words:
-            start_ms = item['start'] * 1000
-            end_ms = item['end'] * 1000
-            audio = audio[:start_ms] + AudioSegment.silent(duration=(end_ms - start_ms)) + audio[end_ms:]
-    return audio
+# #     audio = AudioSegment.from_wav(audio_file)
+# #     for item in word_timestamps:
+# #         if item['word'] in bad_words:
+# #             start_ms = item['start'] * 1000
+# #             end_ms = item['end'] * 1000
+# #             audio = audio[:start_ms] + AudioSegment.silent(duration=(end_ms - start_ms)) + audio[end_ms:]
+# #     return audio
 
-def process_audio_text(audio_file, model_path):
+# # def process_audio_text(audio_file, model_path):
+# #     try:
+# #         # Step 1: Transcribe audio with timestamps
+# #         word_timestamps = transcribe_audio_with_timestamps(audio_file, model_path)
+# #         if not word_timestamps:
+# #             raise ValueError("No transcribed words found in the audio.")
+
+# #     except Exception as e:
+# #         print(f"Error processing audio text: {e}")
+# #         return None
+
+# #---------------------------------------File Upload/Download--------------------------------------
+@app.route('/upload_audio', methods=['POST'])
+def upload_audio():
     try:
-        # Step 1: Transcribe audio with timestamps
-        word_timestamps = transcribe_audio_with_timestamps(audio_file, model_path)
-        if not word_timestamps:
-            raise ValueError("No transcribed words found in the audio.")
+        # Get the audio file from the request
+        audio_file = request.files['file']
+        global audio_file_name
+        audio_file_name = audio_file.filename
+        audio = AudioSegment.from_file(audio_file)
 
-    except Exception as e:
-        print(f"Error in transcription step: {e}")
-        return None  # Or handle the error as needed
+        # Process the audio file to mute bad words
+        processed_audio_path = process_audio(audio)
 
-    try:
-        # Step 2: Detect bad words from transcribed text
-        transcribed_text = " ".join([item['word'] for item in word_timestamps])
-        bad_words = predict_bad_words(transcribed_text)
-        if not bad_words:
-            print("No bad words detected in the transcription.")
-            return audio_file  # Return original file if no bad words are detected
-
-    except Exception as e:
-        print(f"Error in bad word detection: {e}")
-        return None  # Or handle the error as needed
-
-    try:
-        # Step 3: Mute bad words in audio
-        muted_file = mute_bad_words_in_audio(audio_file, bad_words, word_timestamps)
-        if not muted_file:
-            raise ValueError("Failed to create muted audio file.")
-
-    except Exception as e:
-        print(f"Error in muting bad words: {e}")
-        return None  # Or handle the error as needed
-
-    try:
-        # Save the processed (muted) audio to Azure Blob Storage
-        processed_audio_path = f"muted_audio_{audio_file_name}"
-        processed_audio_buffer = io.BytesIO()
-        muted_file.export(processed_audio_buffer, format="wav")
-        processed_audio_buffer.seek(0)
-
-        blob_client = container_client.get_blob_client(processed_audio_path)
-        blob_client.upload_blob(processed_audio_buffer, overwrite=True)
-
-        return processed_audio_path
-    except Exception as e:
-        print(f"Error uploading to Azure: {e}")
-        return None
-
-
-@app.route("/process_audio", methods=["POST"])
-def process_audio_route():
-    try:
-        # Get the file from the request
-        file = request.files['audio_file']
-        audio_file_name = file.filename
-
-        # Save the uploaded file to a temporary location
-        temp_path = f"temp_{audio_file_name}"
-        file.save(temp_path)
-
-        # Process the audio and mute bad words
-        processed_audio_path = process_audio(temp_path)
-
-        # If processing was successful, return the path of the processed file
         if processed_audio_path:
-            return jsonify({"processed_audio_path": processed_audio_path})
+            return jsonify({"message": "Audio processed and uploaded successfully", "path": processed_audio_path})
         else:
-            return jsonify({"error": "Failed to process audio"}), 500
-
+            return jsonify({"message": "Audio processing failed"}), 400
     except Exception as e:
-        print(f"Error in /process_audio route: {e}")
-        return jsonify({"error": "Internal Server Error"}), 500
+        print(f"Error during file upload: {e}")
+        return jsonify({"message": "Error during file upload"}), 500
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # Default to 5000 if PORT is not set
-    app.run(debug=True, host="0.0.0.0", port=port)
+#-----------------------------------------Download--------------------------------------
+@app.route('/download_audio/<audio_file_name>', methods=['GET'])
+def download_audio(audio_file_name):
+    try:
+        blob_client = container_client.get_blob_client(audio_file_name)
+        download_stream = blob_client.download_blob()
+        return send_file(io.BytesIO(download_stream.readall()), as_attachment=True, download_name=audio_file_name)
+    except Exception as e:
+        print(f"Error during file download: {e}")
+        return jsonify({"message": "Error during file download"}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True)
