@@ -6,3 +6,4 @@ librosa==0.10.2.post1
 tensorflow==2.18.0
 vosk==0.3.45
 requests==2.32.3
+azure-storage-blob==12.10.0
