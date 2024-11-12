@@ -6,24 +6,16 @@ import librosa
 from tensorflow.keras.models import load_model
 from tensorflow.keras.optimizers import Adam
 import os
-import time
-import shutil
 import pickle
-from vosk import Model, KaldiRecognizer
-import wave
-import json
-import pickle
-from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-import os
-import subprocess
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
+import io
 
-app = Flask(__name__)
+app = Flask(_name_)
 CORS(app)  # Allow cross-origin requests for React Native
 
 # Load your pre-trained model
 model = load_model('My_Best_Model.h5')
-
 model.compile(optimizer=Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
 
 model_2 = load_model('fast_text_model.h5')
@@ -38,6 +30,11 @@ with open('ft_char_tokenizer.pkl', 'rb') as handle:
 # Define the segment duration (500 milliseconds)
 segment_duration = 500
 
+# Azure Blob Storage connection
+connection_string = "DefaultEndpointsProtocol=https;AccountName=wmadprojectcontainer;AccountKey=AVZbuCTn7xKm4Ere7oGSfvC3JTxuBca9j76yripqxok3J9xKiYiIomY6sX3qHFP0O5oTjoNkTJia+AStFGlfmg==;EndpointSuffix=core.windows.net"
+container_name = "wmadprojectcontainer"
+blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+container_client = blob_service_client.get_container_client(container_name)
 
 # Function to extract features from audio segments
 def extract_features_from_segment(segment):
@@ -82,9 +79,15 @@ def process_audio(audio):
             for start, end in bad_word_indices:
                 audio = audio[:start] + AudioSegment.silent(duration=end - start) + audio[end:]
 
-            # Save the processed (muted) audio to a file
-            processed_audio_path = f'static/muted_audio_{audio_file_name}'
-            audio.export(processed_audio_path, format="wav")
+            # Save the processed (muted) audio to Azure Blob Storage
+            processed_audio_path = f"muted_audio_{audio_file_name}"
+            processed_audio_buffer = io.BytesIO()
+            audio.export(processed_audio_buffer, format="wav")
+            processed_audio_buffer.seek(0)
+
+            blob_client = container_client.get_blob_client(processed_audio_path)
+            blob_client.upload_blob(processed_audio_buffer, overwrite=True)
+
             return processed_audio_path
         else:
             print("No valid segments to predict.")
@@ -92,6 +95,7 @@ def process_audio(audio):
     except Exception as e:
         print(f"Error processing audio file: {e}")
         return None
+
 #------------------------------------------Text------------------------------------------
 def preprocess_sentence(sentence):
     char_max_length = 15
@@ -180,12 +184,8 @@ def mute_bad_words_in_audio(audio_file, bad_words, word_timestamps):
             start_ms = item['start'] * 1000
             end_ms = item['end'] * 1000
             audio = audio[:start_ms] + AudioSegment.silent(duration=(end_ms - start_ms)) + audio[end_ms:]
-            
-
     return audio
 
-
-    
 def process_audio_text(audio_file, model_path):
     try:
         # Step 1: Transcribe audio with timestamps
@@ -220,91 +220,44 @@ def process_audio_text(audio_file, model_path):
         return None  # Or handle the error as needed
 
     try:
-        # Save the processed (muted) audio to a file
-        processed_audio_path = f'static/muted_audio_{audio_file_name}'
-        muted_file.export(processed_audio_path, format="wav")
+        # Save the processed (muted) audio to Azure Blob Storage
+        processed_audio_path = f"muted_audio_{audio_file_name}"
+        processed_audio_buffer = io.BytesIO()
+        muted_file.export(processed_audio_buffer, format="wav")
+        processed_audio_buffer.seek(0)
+
+        blob_client = container_client.get_blob_client(processed_audio_path)
+        blob_client.upload_blob(processed_audio_buffer, overwrite=True)
+
         return processed_audio_path
-
     except Exception as e:
-        print(f"Error in saving the muted audio file: {e}")
-        return None  # Or handle the error as needed
+        print(f"Error uploading to Azure: {e}")
+        return None
 
 
-    
-
-audio_file_name = "" ########-----------
-
-file_path_glob = ""
-# API route to process the audio
-@app.route('/process-audio', methods=['POST'])
+@app.route("/process_audio", methods=["POST"])
 def process_audio_route():
-    global file_path_glob, audio_file_name
     try:
-        # print(audio_file)
-        # Receive the audio file from the request
-        audio_file = request.files.get('audio')
-        model_type = request.form.get('model') #gets which model is picked
+        # Get the file from the request
+        file = request.files['audio_file']
+        audio_file_name = file.filename
 
-        print(audio_file)    
-        print(audio_file.filename)
-        audio_file_name  = audio_file.filename
+        # Save the uploaded file to a temporary location
+        temp_path = f"temp_{audio_file_name}"
+        file.save(temp_path)
 
-        if not audio_file:
-            return jsonify({'status': 'error', 'message': 'No audio file received'}), 400
+        # Process the audio and mute bad words
+        processed_audio_path = process_audio(temp_path)
 
-        # Determine the file extension and load it
-        file_extension = audio_file.filename.split('.')[-1].lower()
-        if file_extension not in ['wav', 'mp3']:
-            return jsonify({'status': 'error', 'message': 'Invalid file format. Only WAV and MP3 are supported.'}), 400
-
-        # Save the uploaded file temporarily
-        temp_file_path = os.path.join('static', audio_file.filename)
-        print(temp_file_path)
-        audio_file.save(temp_file_path)
-
-        # Load the audio file with pydub
-        if file_extension == 'wav':
-            audio = AudioSegment.from_wav(temp_file_path)
-        else:
-            audio = AudioSegment.from_mp3(temp_file_path)
-
-#---------------------------------------> Process the audio file <------------------------------------------------------------------------
-        if model_type == 'Audio Model':
-            processed_audio_path = process_audio(audio)
-        
-        else:
-        
-            processed_audio_path = process_audio_text("static\\"+ audio_file_name,'vosk-model-small-hi-0.22')
-            
-        file_path_glob = processed_audio_path
-        print("Global File Path === ",file_path_glob,audio_file_name,file_path_glob)
-        
+        # If processing was successful, return the path of the processed file
         if processed_audio_path:
-            return jsonify({'processed_audio': f'/{processed_audio_path}'}), 200
+            return jsonify({"processed_audio_path": processed_audio_path})
         else:
-            return jsonify({'status': 'error', 'message': 'Processing failed'}), 500
+            return jsonify({"error": "Failed to process audio"}), 500
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"Error in /process_audio route: {e}")
+        return jsonify({"error": "Internal Server Error"}), 500
 
-# Serve processed audio files and delete them after serving
-@app.route('/static/<filename>')
-def serve_and_delete_file(filename):
-    global file_path_glob
-    # file_path = os.path.join('static', filename)
-    # file_path = f"static/muted_{audio_file_name}"
-    file_path = file_path_glob
-    print(file_path)
-    try:
-        # Send the file
-        response = send_file(file_path)
-        print(response)
-        return response
-    # except FileNotFoundError:
-    #     abort(404, description="File not found")
-    # except Exception as e:
-    except:
-        pass
-    #     abort(500, description=str(e))
-
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000) 
+if _name_ == "_main_":
+    app.run(debug=True)
