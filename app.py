@@ -32,7 +32,7 @@ segment_duration = 500
 
 # Azure Blob Storage connection
 connection_string = "DefaultEndpointsProtocol=https;AccountName=wmadprojectcontainer;AccountKey=AVZbuCTn7xKm4Ere7oGSfvC3JTxuBca9j76yripqxok3J9xKiYiIomY6sX3qHFP0O5oTjoNkTJia+AStFGlfmg==;EndpointSuffix=core.windows.net"
-container_name = "wmadprojectcontainer"
+container_name = "audiofiles"
 blob_service_client = BlobServiceClient.from_connection_string(connection_string)
 container_client = blob_service_client.get_container_client(container_name)
 
