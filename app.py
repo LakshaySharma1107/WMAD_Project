@@ -11,7 +11,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 import io
 
-app = Flask(_name_)
+app = Flask(__name__)
 CORS(app)  # Allow cross-origin requests for React Native
 
 # Load your pre-trained model
